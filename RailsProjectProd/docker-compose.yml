@@ -1,0 +1,139 @@
+version: "3.9"
+services:
+    postgres:
+        image: $IMAGE_POSTGRES
+        env_file: postgres.env
+        volumes:
+            - "${POSTGRES_DATA_LOCAL}:${POSTGRES_DATA_CONTAINER}"
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.2
+        profiles: ['base']
+    redis:
+        image: redis/redis-stack:latest
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.3
+        profiles: ['base']
+    rabbit:
+        image: rabbitmq:3.12-management
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.4
+        profiles: ['base']
+    core_app:
+        image: $AP_REGISTRY/$CORE_REPOSITORY:$TAG_VERSION
+        env_file: core.env
+        restart: always
+        ports:
+          - 80:80
+        volumes:
+            - "${AP_INITIALIZER}/${CORE_DIR_INITIALIZER}:${RAILS_INITIALIZER}"
+            - "${CORE_DIR_SEEDS}:${CONTAINER_CORE_DIR_SEEDS}"
+            - "${CORE_DIR_RAKE}:${CONTAINER_CORE_DIR_RAKE}"
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.5
+        profiles: ['core']
+    core_sidekiq:
+        image: $AP_REGISTRY/$CORE_REPOSITORY:$TAG_VERSION
+        env_file: core.env
+        restart: always
+        volumes:
+            - "${AP_INITIALIZER}/${CORE_DIR_INITIALIZER}:${RAILS_INITIALIZER}"
+        command: ./bin/sidekiq -C config/sidekiq.yml
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.6
+        profiles: ['core']
+    core_sneakers:
+        image: $AP_REGISTRY/$CORE_REPOSITORY:$TAG_VERSION
+        env_file: core.env
+        restart: always
+        volumes:
+            - "${AP_INITIALIZER}/${CORE_DIR_INITIALIZER}:${RAILS_INITIALIZER}"
+        command: bin/rails sneakers:run
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.7
+        profiles: ['core']
+    azure_billing_sidekiq:
+        image: $AP_REGISTRY/$AZURE_BILLING_REPOSITORY:$TAG_VERSION
+        env_file: azure_billing.env
+        volumes:
+            - "${AP_INITIALIZER}/${AZURE_BILLING_DIR_INITIALIZER}:${RAILS_INITIALIZER}"
+        user: app
+        command: ./bin/sidekiq -C config/sidekiq.yml
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.8
+        profiles: ['azure_billing']
+    azure_billing_sneakers:
+        image: $AP_REGISTRY/$AZURE_BILLING_REPOSITORY:$TAG_VERSION
+        env_file: azure_billing.env
+        volumes:
+            - "${AP_INITIALIZER}/${AZURE_BILLING_DIR_INITIALIZER}:${RAILS_INITIALIZER}"
+        user: app
+        command: ./bin/rails sneakers:run
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.9
+        profiles: ['azure_billing']
+    activity_app:
+        image: $AP_REGISTRY/$ACTIVITY_REPOSITORY:$TAG_VERSION
+        env_file: activity.env
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.10
+        profiles: ['activity']
+    activity_sneakers:
+        image: $AP_REGISTRY/$ACTIVITY_REPOSITORY:$TAG_VERSION
+        env_file: activity.env
+        user: app
+        command: ./bin/rails sneakers:run
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.11
+        profiles: ['activity']
+    web:
+        image: $AP_REGISTRY/$WEB_REPOSITORY:$WEB_IMAGE_TAG
+        volumes:
+            - "$WEB_NGINX_CONF:$CONTAINER_WEB_NGINX_CONF"
+            - "$WEB_NGINX_CONF_D:$CONTAINER_WEB_NGINX_CONF_D"
+            - "$WEB_NGINX_AP:$CONTAINER_WEB_NGINX_AP"
+        restart: unless-stopped
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.12
+        profiles: ['web']
+    ccp_root_config:
+        image: $AP_REGISTRY/$CCP_ROOT_CONFIG_REPOSITORY:$TAG_VERSION
+        restart: unless-stopped
+        volumes:
+            - "$CCP_ROOT_CONFIG_IMPORTMAP:$CONTAINER_CCP_ROOT_CONFIG_IMPORTMAP"
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.13
+        profiles: ['ccp']
+    ccp_core:
+        image: $AP_REGISTRY/$CCP_REPOSITORY:$TAG_VERSION
+        restart: unless-stopped
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.14
+        profiles: ['ccp']
+    ccp_internal_marketplace:
+        image: $AP_REGISTRY/$CCP_INTERNAL_MARKETPLACE_REPOSITORY:$TAG_VERSION
+        restart: unless-stopped
+        networks:
+            test_ap:
+                ipv4_address: 172.16.238.15
+        profiles: ['ccp']
+        
+networks:
+    test_ap:
+        internal: false
+        ipam:
+            driver: default
+            config:
+                - subnet: 172.16.238.0/24
